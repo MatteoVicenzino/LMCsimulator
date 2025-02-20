@@ -1,104 +1,120 @@
-# Matteo Vicenzino SM3201397
-
-class LMC:
-    # class containing the methods to simulate the LMC program execution
-    def __init__(self, memory):
-        self.memory = memory # memory of 100 cells
+class Assembler:
+    # class containg the methods to parse and decode the LMC assembly into machine code
+    def __init__(self):
+        self.memory = [0]*100 # memory of 100 cells
         self.pc = 0 # program counter
-        self.accumulator = 0 # regirster
-        self.flag = False # overflow flag
-        self.input = [] # input queue
-        self.output = [] # output queue
+        self.labels = {}
+        self.operations = {
+            "ADD": 100,
+            "SUB": 200,
+            "STA": 300,
+            "LDA": 500,
+            "BRA": 600,
+            "BRZ": 700,
+            "BRP": 800,
+            "INP": 901,
+            "OUT": 902,
+            "HLT": 0,
+            "DAT": 0
+        }
         
-        
-    def execute_lmc(self, input_list = [], slow = False):
-        print("Executing...")
-        """
-        function that takes in input:
-        - input_list: the input list to be used by the program
-        - slow: a boolean to run the program step by step if True
-        the function simulate the LMC program execution
-        """
-        [self.input.append(item) for item in input_list] # save input list into the queue
-        
-        try:
-            while self.pc < 100: # loop until HLT instruction, or the program counter is invalid
-                
-                operation = self.memory[self.pc] // 100 # save the operation
-                value = self.memory[self.pc] % 100 # save the memory address of the value
 
-                if slow: # step by step execution
-                    print(f"PC: {self.pc} ACC: {self.accumulator} FLAG: {self.flag} INPUT: {self.input} OUTPUT: {self.output}")
-                    print("MEMORY: ", self.memory)
-                    input("Press Enter to continue...")
+    @staticmethod
+    def parse_file(file):
+        """
+        function that takes in input the file object
+        and returns in output two different files parsed as a list of strings
+        - nocomment_file: file without comments, evey line is a string
+            this file will be used in get_labels function
+        - parsed_file: file parsed completly, every line is a list of strings
+            this file used for decode_instructions function
+        """
+        # initialize the two files
+        nocomment_file = []
+        parsed_file = []
+        
+        for line in file:
+            # remove comments
+            parsed_line = line.split("//")[0].strip()
+            if parsed_line:
+                nocomment_file.append(parsed_line.upper())
+                parsed_file.append([word.upper() for word in parsed_line.split()]) # split the line
                 
-                self.do_instruction(operation, value)
-                
-        except StopIteration:
-            print("Program executed successfully.")
+        # check if the file is too long to be loaded into LMC memory
+        if len(parsed_file) > 100:
+            raise FileTooLongError("Program has more than 100 instructions, cannot be load into LMC memory")
+        
+        return nocomment_file, parsed_file
+    
+    
+    def get_labels(self,nocomment_file):
+        """
+        function that takes in input the nocomment_file and populates the dictionary self.labels
+        with the labels as keys and the corresponding memory address as values
+        """
+        self.pc == 0
+        for line in nocomment_file:
+            line = line.split(maxsplit=1)
+            if len(line) > 1 and line[0] not in self.operations:
+                self.labels[line[0]] = self.pc
+            self.pc = (self.pc + 1) % 1000
+
+
+    def translate_op(self, op, mem = None):
+        """
+        function that takes in input the instruction as OPERATION and MEMORY ADDRESS
+        and returns the corresponding operation code
+        """
+        if mem is None: # case Operation only
+            return self.operations[op]
+        elif mem.isdigit(): # case Operation + Number
+            return self.operations[op] + int(mem)
+        elif mem in self.labels: # case Operation + Label
+            return self.operations[op] + self.labels[mem]
+        else:
+            raise InvalidInstructionError(f"invalid instruction in line {self.pc}:  {op} {mem}")
         
     
-    def do_instruction(self, operation, value):
+    def decode_instructions(self, parsed_file):
+        print("Decoding...")
+        """ 
+        function that takes in input the parsed_file 
+        and populates the list self.memory with the instructions translated into machine code
         """
-        function that given the operation code and the memory address value as integers,
-        performs the corresponding instruction
-        """
-        if operation == 1: # ADD: add value to accumulator
-            sum = self.accumulator + self.memory[value]
-            if sum > 999:
-                self.accumulator = sum % 1000
-                self.flag = True
+        self.pc = 0
+        for line in parsed_file:
+            
+            if len(line) == 1: # case Operation only
+                if line[0] in self.operations:
+                    self.memory[self.pc] = Assembler.translate_op(self, line[0])
+                else:
+                    raise InvalidInstructionError(f"invalid instruction in line {self.pc}:  {line}")
+                
+            elif len(line) == 2:
+                if line[0] in self.operations: # case Operation + Address
+                    self.memory[self.pc] = Assembler.translate_op(self, line[0], line[1])
+                    
+                elif line[0] in self.labels and line[1] in self.operations: # case Label + Operation
+                    self.memory[self.pc] = Assembler.translate_op(self, line[1])
+                else:
+                    raise InvalidInstructionError(f"invalid instruction in line {self.pc}:  {line}")
+            
+            elif len(line) == 3: # case Label + Operation + Address
+                if line[0] in self.labels and line[1] in self.operations:
+                    self.memory[self.pc] = Assembler.translate_op(self, line[1], line[2])
+                else:
+                    raise InvalidInstructionError(f"invalid instruction in line {self.pc}:  {line}")
+                    
             else:
-                self.accumulator = sum
-                self.flag = False
-            self.pc = (self.pc + 1) % 1000
-
-        elif operation == 2: # SUB: subtract value from accumulator
-            diff = self.accumulator - self.memory[value]
-            if diff < 0:
-                self.accumulator = diff % 1000
-                self.flag = True
-            else:
-                self.accumulator = diff
-                self.flag = False
-            self.pc = (self.pc + 1) % 1000
-
-        elif operation == 3: # STA: store value into memory
-            self.memory[value] = self.accumulator
+                raise InvalidInstructionError(f"invalid instruction in line {self.pc}:  {line}")
+            
             self.pc = (self.pc + 1) % 1000
             
-        elif operation == 5: # LDA: load value into accumulator
-            self.accumulator = self.memory[value]
-            self.pc = (self.pc + 1) % 1000
-            
-        elif operation == 6: # BRA: unconditional branch to value
-            self.pc = value
-            
-        elif operation == 7: # BRZ: branch to value if accumulator is zero
-            self.pc = value if self.accumulator == 0 and self.flag == False else self.pc + 1
-            
-        elif operation == 8: # BRP: branch to value if accumulator is positive
-            self.pc = value if self.flag == False else self.pc + 1
-            
-        elif operation == 9 and value == 1: # INP: take input from the queue
-            try:
-                self.accumulator = self.input.pop(0)
-            except IndexError:
-                raise EmptyInput("Error: empty input queue")
-            self.pc = (self.pc + 1) % 1000
-            
-        elif operation == 9 and value == 2: # OUT: append accumulator to output list
-            self.output.append(self.accumulator)
-            self.pc = (self.pc + 1) % 1000            
-            
-        elif operation == 0: # HLT: halt the program
-            raise StopIteration
-        
-        else: # invalid operation
-            raise InvalidOperationError(f"invalid operation in line {self.pc}: {operation} {value}")
-        
-        
-class EmptyInput(Exception):
+        print(f"File compiled successfully.")
+        return self.memory
+    
+    
+class FileTooLongError(Exception):
     pass
-class InvalidOperationError(Exception):
+class InvalidInstructionError(Exception):
     pass

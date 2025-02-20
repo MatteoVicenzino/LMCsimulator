@@ -1,5 +1,3 @@
-# Matteo Vicenzino SM3201397
-
 from Assembler import Assembler
 from LMC import LMC
 

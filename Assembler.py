@@ -1,5 +1,3 @@
-# Matteo Vicenzino SM3201397
-
 class Assembler:
     # class containg the methods to parse and decode the LMC assembly into machine code
     def __init__(self):
